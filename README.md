@@ -149,7 +149,6 @@ Le modèle Random Forest présente les meilleures performances prédictives parm
 **www.linkedin.com/in/manel-garmachi**
 
 Junior Data Analyst 
-2025-2026
-🔗 LinkedIn : https://www.linkedin.com/in/manelgarmachi
 
-🔗 GitHub : https://github.com/manel-gr
+2025-2026
+
