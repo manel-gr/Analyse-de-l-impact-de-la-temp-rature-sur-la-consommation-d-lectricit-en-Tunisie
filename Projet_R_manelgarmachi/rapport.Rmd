@@ -1,0 +1,475 @@
+---
+title: "Analyse de l’impact de la température sur la consommation d’électricité"
+author: "Manel Garmachi"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: false
+  
+---
+
+
+\newpage
+
+```{=latex}
+\tableofcontents
+```
+\newpage
+```{r setup_packages, include=FALSE}
+library(tidyverse)
+library(rvest)
+library(readr)
+library(knitr)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+
+
+
+
+```
+
+
+
+
+# Contexte et objectifs clairs
+
+
+
+## Contexte
+
+La Tunisie connaît une augmentation continue de la demande en électricité, portée par le développement économique, l’urbanisation et l’évolution des modes de consommation.<br> Parallèlement, le pays est soumis à des variations climatiques marquées, notamment des vagues de chaleur estivales, susceptibles d’accentuer la consommation liée à la climatisation. <br>
+Dans ce contexte, analyser le lien entre la température et la consommation d’électricité est essentiel pour mieux comprendre la dynamique de la demande énergétique et aider à la planification du système électrique.
+
+## Problématique
+
+Dans quelle mesure les variations de température influencent-elles 
+la consommation d’électricité en Tunisie <br> sur la période 2015–2022 ?
+
+## Objectifs
+
+### Objectif principal
+
+L’objectif principal de ce projet est d’analyser l’impact des variations de température sur la consommation d’électricité en Tunisie entre 2015 et 2022, en utilisant des données ouvertes et des outils de data science sous R.
+
+### Objectifs spécifiques
+
+- Collecter et préparer deux sources de données pour la période 2015–2022 :  
+
+  - la consommation d’électricité par habitant (kWh per capita) issue de la Banque mondiale (fichier CSV)  
+  
+  - les températures historiques à Tunis obtenues par web scraping à partir d’un site météo.
+  
+- Construire un jeu de données consolidé liant, pour chaque année entre 2015 et 2022, la consommation d’électricité et la température moyenne.
+
+- Réaliser une analyse exploratoire des tendances de la consommation d’électricité et de la température sur la période étudiée.
+
+- Modéliser la relation entre les deux variables principales (consommation d’électricité et température moyenne) à l’aide de modèles de régression sous R.
+
+- Interpréter les résultats obtenus et discuter leurs implications pour la gestion de la demande énergétique en Tunisie.
+
+# Spécification des Variables
+
+## Variable dépendante : Consommation d’électricité
+
+La variable dépendante de cette étude est la consommation d’électricité par habitant en Tunisie, mesurée par l’indicateur *Electric power consumption (kWh per capita)* fourni par la Banque mondiale. Les données annuelles sont extraites sous forme de fichier CSV puis filtrées pour la période 2015–2022. Chaque valeur représente la quantité moyenne d’électricité consommée par habitant au cours d’une année donnée.
+
+## Variable explicative : Température moyenne
+
+La variable explicative principale est la température moyenne annuelle, obtenue à partir de données météorologiques historiques pour la ville de Tunis recueillies par web scraping depuis un site de météo. 
+
+Les données journalières ou mensuelles sont d’abord extraites au format tableau (HTML), puis agrégées pour calculer, pour chaque année de 2015 à 2022, une température moyenne annuelle. 
+
+Cette température moyenne est ensuite utilisée pour expliquer la variation de la consommation d’électricité.
+
+# Période d’étude
+
+L’analyse est menée sur la période 2015–2022, ce qui permet de disposer d’un horizon temporel récent tout en tenant compte de plusieurs années de variations climatiques et de consommation.
+
+
+```{r setup, include=FALSE}
+# Charger les packages nécessaires
+library(tidyverse)
+library(readr)
+```
+
+# Sources de données
+
+Cette étude repose sur deux principales sources de données.
+
+## Consommation d’électricité
+
+La première source concerne la consommation d’électricité par habitant en Tunisie. Les données sont issues de la base de données de la **Banque mondiale**, à travers l’indicateur *Electric power consumption (kWh per capita)*.  
+Les données sont téléchargées au format **CSV**, puis filtrées afin de conserver uniquement la période allant de **2015 à 2022**.
+
+## Température
+
+La deuxième source concerne la température. Les données de température historique pour la ville de **Tunis** sont collectées à partir d’un site de météo en ligne.  
+Elles sont extraites par **web scraping sous R**, à l’aide du package **rvest**. Les données recueillies sont ensuite agrégées afin de calculer une **température moyenne annuelle** pour chaque année comprise entre **2015 et 2022**.
+
+# Importation des données 
+
+Au début de notre analyse, nous commençons par intégrer les données essentielles à partir des sources distincts.
+
+```{r}
+# Charger le package tidyverse (manipulation et nettoyage des données)
+library(tidyverse)
+
+# Lire le fichier CSV de la Banque mondiale
+# skip = 4 permet d’ignorer les premières lignes non utiles du fichier
+wb_raw <- read.csv("API_EG.USE.ELEC.KH.PC_DS2_en_csv_v2_1880.csv", skip = 4)
+
+# Filtrer les données pour ne garder que la Tunisie
+# Country.Code = "TUN" correspond au code pays de la Tunisie
+wb_tunisia <- wb_raw %>%
+  filter(Country.Code == "TUN")
+
+# Transformer les colonnes des années en format long
+# Les colonnes commencent par "X" (ex : X2015, X2016, ...)
+wb_long <- wb_tunisia %>%
+  pivot_longer(
+    cols = starts_with("X"),           # Sélection des colonnes des années
+    names_to = "year",                  # Nom de la nouvelle colonne des années
+    values_to = "elec_kwh_per_capita"   # Nom de la colonne de consommation
+  ) %>%
+  mutate(
+    # Supprimer le "X" devant l’année (X2015 → 2015)
+    # puis convertir l’année en entier
+    year = as.integer(sub("X", "", year))
+  )
+
+# Filtrer les données pour la période d’étude : 2015 à 2022
+# et garder uniquement les colonnes utiles
+wb_2015_2022 <- wb_long %>%
+  filter(year >= 2015, year <= 2022) %>%
+  select(year, elec_kwh_per_capita)
+
+# Afficher les données sous forme de tableau propre dans le rapport
+knitr::kable(
+  wb_2015_2022,
+  caption = "Consommation d'électricité par habitant en Tunisie (2015–2022)"
+)
+
+
+```
+# Collecte des données météorologiques
+
+Nous récupérons les températures historiques de Tunis pour la période 2015–2022 à l'aide de web scraping depuis le site timeanddate.com.
+
+```{r collect_weather}
+# Fonction pour extraire la température moyenne mensuelle
+
+get_month_temp <- function(year, month) {
+url <- paste0(
+  "https://www.timeanddate.com/weather/tunisia/tunis/historic?month=",
+  month,
+  "&year=",
+  year
+)
+
+
+page <- read_html(url)
+
+df <- page %>%
+html_element("table#wt-his") %>%
+html_table(fill = TRUE)
+
+# Renommer les colonnes pour éviter les erreurs
+
+names(df) <- paste0("V", seq_along(df))
+
+df_clean <- df %>%
+slice(-1) %>%
+select(temp = V3) %>%       # le 3e colonne = Temp
+mutate(
+temp_f = as.numeric(gsub("[^0-9.-]", "", temp)),
+temp_c = (temp_f - 32)/1.8   # convertir °F en °C
+)
+
+df_clean %>%
+summarise(temp_mean = mean(temp_c, na.rm = TRUE)) %>%
+mutate(year = year, month = month)
+}
+
+# Exemple pour tester janvier 2018
+
+get_month_temp(2018, 1)
+# Boucle pour toutes les années et tous les mois
+
+years <- 2015:2022
+months <- 1:12
+
+all_temps <- map_df(years, function(y) {
+map_df(months, function(m) {
+Sys.sleep(1)  # petit délai pour ne pas bloquer le site
+get_month_temp(y, m)
+})
+})
+
+# Calculer la température moyenne annuelle
+
+annual_temps <- all_temps %>%
+group_by(year) %>%
+summarise(annual_temp_mean = mean(temp_mean, na.rm = TRUE)) %>%
+ungroup()
+
+# Afficher le tableau
+
+knitr::kable(annual_temps, caption = "Température annuelle moyenne à Tunis (2015–2022)")
+
+
+ write.csv(annual_temps, "temperature_annuelle_tunis.csv", row.names = FALSE)
+
+```
+
+Ce tableau présente la température annuelle moyenne estimée à Tunis sur la période 2015–2022, obtenue par web scraping à partir des observations horaires du site timeanddate.com.
+
+#  Analyse de Données
+
+## Analyse temporelle de la consommation d’électricité par habitant en Tunisie (2015–2022)
+
+```{r courbe }
+
+ggplot(wb_2015_2022, aes(x = year, y = elec_kwh_per_capita)) +
+geom_line(color = "blue") +
+geom_point(color = "blue") +
+labs(
+title = "Évolution de la consommation d'électricité par habitant en Tunisie (2015–2022)",
+x = "Année",
+y = "Consommation d'électricité (kWh par habitant)"
+) +
+theme_minimal()
+```
+
+```{r analyse2 }
+
+elec_variation <- wb_2015_2022%>%
+arrange(year) %>%
+mutate(
+diff_abs = elec_kwh_per_capita - lag(elec_kwh_per_capita),
+diff_pct = 100 * diff_abs / lag(elec_kwh_per_capita)
+)
+
+knitr::kable(
+elec_variation,
+digits = 2,
+caption = "Variation annuelle de la consommation d'électricité par habitant en Tunisie (2015–2022)"
+)
+
+ggplot(filter(elec_variation, !is.na(diff_pct)),
+       aes(x = factor(year), y = diff_pct)) +
+  geom_col(fill = "steelblue") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(
+    title = "Variation annuelle de la consommation d'électricité par habitant",
+    x = "Année",
+    y = "Variation par rapport à l'année précédente (%)"
+  ) +
+  theme_minimal()
+
+
+```
+## Statistiques descriptives
+```{r}
+# Statistiques descriptives de la consommation d’électricité
+summary(wb_2015_2022$elec_kwh_per_capita)
+
+
+# Statistiques descriptives de la température annuelle
+summary(annual_temps$annual_temp_mean)
+```
+## Visualisation conjointe : température vs consommation
+```{r}
+# Fusion des deux jeux de données par l’année
+energy_climate <- wb_2015_2022 %>%
+left_join(annual_temps, by = "year")
+
+
+# Nuage de points température – consommation
+ggplot(energy_climate,
+aes(x = annual_temp_mean, y = elec_kwh_per_capita)) +
+geom_point(color = "darkorange", size = 3) +
+labs(
+title = "Relation entre température moyenne et consommation d’électricité",
+x = "Température moyenne annuelle (°C)",
+y = "Consommation d’électricité (kWh par habitant)"
+) +
+theme_minimal()
+```
+
+
+## Analyse de corrélation
+
+
+```{r}
+# Calcul du coefficient de corrélation de Pearson
+correlation <- cor(
+energy_climate$annual_temp_mean,
+energy_climate$elec_kwh_per_capita,
+use = "complete.obs"
+)
+
+
+correlation
+```
+## Régression linéaire simple
+```{r}
+# Estimation du modèle de régression linéaire
+model_linear <- lm(
+elec_kwh_per_capita ~ annual_temp_mean,
+data = energy_climate
+)
+
+
+# Résumé du modèle
+summary(model_linear)
+```
+## Visualisation du modèle estimé
+```{r}
+# Nuage de points + droite de régression
+ggplot(energy_climate,
+aes(x = annual_temp_mean, y = elec_kwh_per_capita)) +
+geom_point(color = "darkorange", size = 3) +
+geom_smooth(method = "lm", se = TRUE, color = "blue") +
+labs(
+title = "Régression linéaire : impact de la température sur la consommation",
+x = "Température moyenne annuelle (°C)",
+y = "Consommation d’électricité (kWh par habitant)"
+) +
+theme_minimal()
+```
+
+## Régression non linéaire (terme quadratique)
+```{r}
+# Modèle avec terme quadratique
+model_quad <- lm(
+elec_kwh_per_capita ~ annual_temp_mean + I(annual_temp_mean^2),
+data = energy_climate
+)
+
+
+# Résumé du modèle quadratique
+summary(model_quad)
+```
+## Comparaison des modèles
+```{r}
+# Comparaison via le R²
+summary(model_linear)$r.squared
+summary(model_quad)$r.squared
+```
+
+# Modèles de Machine Learning
+Afin de compléter l’analyse économétrique classique, des modèles de machine learning supervisé ont été estimés pour prédire la consommation d’électricité par habitant à partir de la température moyenne annuelle. L’objectif est de comparer leurs performances prédictives avec celles des modèles de régression traditionnels.
+## Préparation des données pour le Machine Learning
+```{r}
+# Fusion des données électricité + température
+ml_data <- wb_2015_2022 %>%
+  left_join(annual_temps, by = "year") %>%
+  mutate(
+    temp = annual_temp_mean,      # température moyenne
+    temp_sq = annual_temp_mean^2  # température au carré (non-linéarité)
+  ) %>%
+  select(year, elec_kwh_per_capita, temp, temp_sq) %>%
+  na.omit()
+
+# Variable cible
+y <- ml_data$elec_kwh_per_capita
+
+# Matrice explicative (2 variables → glmnet OK)
+X <- as.matrix(ml_data[, c("temp", "temp_sq")])
+```
+## Modèle 1 : Régression Ridge
+La régression Ridge est une méthode de régularisation qui permet de réduire le sur-apprentissage en pénalisant la taille des coefficients.
+```{r}
+library(glmnet)
+
+set.seed(123)
+
+ridge_model <- cv.glmnet(
+  x = X,
+  y = y,
+  alpha = 0      # Ridge
+)
+
+# Lambda optimal
+ridge_model$lambda.min
+
+# Coefficients du modèle Ridge
+coef(ridge_model, s = "lambda.min")
+```
+## Modèle 2 : Régression Lasso
+La régression Lasso permet à la fois la régularisation et la sélection de variables.
+```{r}
+lasso_model <- cv.glmnet(
+  x = X,
+  y = y,
+  alpha = 1      # Lasso
+)
+
+# Lambda optimal
+lasso_model$lambda.min
+
+# Coefficients du modèle Lasso
+coef(lasso_model, s = "lambda.min")
+```
+
+## Modèle 3 : Random Forest
+Le modèle Random Forest est une méthode non linéaire basée sur des arbres de décision, capable de capturer des relations complexes.
+```{r}
+library(randomForest)
+
+set.seed(123)
+
+rf_model <- randomForest(
+  elec_kwh_per_capita ~ temp + temp_sq,
+  data = ml_data,
+  ntree = 500,
+  importance = TRUE
+)
+
+# Importance des variables
+importance(rf_model)
+```
+
+## Comparaison des modèles
+```{r}
+# Prédictions
+pred_ridge <- predict(ridge_model, newx = X, s = "lambda.min")
+pred_lasso <- predict(lasso_model, newx = X, s = "lambda.min")
+pred_rf <- predict(rf_model, ml_data)
+
+# Fonction RMSE
+rmse <- function(y, y_hat) {
+  sqrt(mean((y - y_hat)^2))
+}
+
+# Calcul des RMSE
+rmse_ridge <- rmse(y, pred_ridge)
+rmse_lasso <- rmse(y, pred_lasso)
+rmse_rf <- rmse(y, pred_rf)
+
+# Résultats
+rmse_ridge
+rmse_lasso
+rmse_rf
+```
+
+## Analyse finale
+
+L’introduction des modèles de machine learning a permis de compléter l’analyse économétrique classique en évaluant la capacité de différentes approches à prédire la consommation d’électricité à partir de la température moyenne annuelle.
+
+Les modèles de régularisation linéaire, notamment la régression Ridge et la régression Lasso, confirment l’existence d’un lien entre la température et la consommation d’électricité. La régression Lasso met particulièrement en évidence l’importance du terme quadratique de la température, ce qui suggère que l’effet de la température sur la consommation n’est pas strictement linéaire.
+
+Le modèle Random Forest présente la meilleure performance prédictive parmi les modèles testés, avec une erreur quadratique moyenne plus faible. Cette supériorité s’explique par sa capacité à capturer des relations non linéaires et complexes entre les variables, ce qui est cohérent avec le comportement réel de la consommation d’électricité lors des périodes de forte chaleur.
+
+Dans l’ensemble, les résultats du machine learning confirment que la température joue un rôle important dans l’évolution de la consommation d’électricité en Tunisie, tout en montrant que les modèles non linéaires offrent une meilleure capacité de prédiction que les modèles linéaires classiques.
+
+# Conclusion générale
+
+Ce travail avait pour objectif d’analyser l’impact de la température sur la consommation d’électricité par habitant en Tunisie sur la période 2015–2022, en mobilisant des données ouvertes et des outils de data science sous R.
+
+L’analyse exploratoire a mis en évidence une évolution globalement croissante de la consommation d’électricité, accompagnée de variations de la température moyenne annuelle. Les analyses de corrélation et de régression ont montré l’existence d’une relation positive entre la température et la consommation d’électricité, confirmant que les périodes plus chaudes sont associées à une demande énergétique plus élevée.
+
+Les modèles de machine learning ont permis d’enrichir cette analyse en offrant une meilleure capacité prédictive, notamment grâce à la prise en compte de relations non linéaires. Le modèle Random Forest s’est révélé le plus performant, soulignant l’importance de considérer des approches flexibles pour modéliser la demande électrique dans un contexte de changement climatique.
+
+En conclusion, cette étude montre que la température constitue un facteur explicatif significatif de la consommation d’électricité en Tunisie, bien qu’elle ne soit pas le seul déterminant. Ces résultats peuvent contribuer à une meilleure anticipation de la demande énergétique et à une planification plus efficace du système électrique, en particulier face à l’augmentation attendue des épisodes de chaleur à l’avenir.

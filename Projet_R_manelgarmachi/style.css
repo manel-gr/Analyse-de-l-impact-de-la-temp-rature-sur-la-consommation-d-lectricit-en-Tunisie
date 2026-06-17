@@ -1,0 +1,19 @@
+/* Centre le titre principal */
+h1.title {
+  text-align: center;
+}
+
+/* Centre le sous-titre */
+h2.subtitle {
+  text-align: center;
+}
+
+/* Centre l'auteur */
+p.author {
+  text-align: center;
+}
+
+/* Centre la date */
+p.date {
+  text-align: center;
+}
