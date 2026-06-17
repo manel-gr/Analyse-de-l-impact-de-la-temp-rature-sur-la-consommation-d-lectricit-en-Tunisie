@@ -114,6 +114,7 @@ L'ajout d'un terme quadratique améliore légèrement la qualité du modèle. :c
 ### Résultats (RMSE)
 
 | Modèle | RMSE |
+|--------|-------|
 | Ridge | 55.17 |
 | Lasso | 41.07 |
 | Random Forest | 27.61 |
